@@ -5,9 +5,12 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Summary {
-    Success(Vec<String>),
+    Success {
+        points: Vec<String>,
+        quote: Option<String>,
+    },
     Insufficient,
     Failed(String),
 }
@@ -109,7 +112,7 @@ impl ClaudeSummarizer {
         };
 
         let prompt = format!(
-            r#"You are a text summarization specialist. Extract exactly 5 key points from the article below.
+            r#"You are a text summarization specialist. Extract exactly 5 key points from the article below, and if there are any direct quotes, extract the most important one with attribution.
 
 RULES:
 1. Each point must be under 20 words
@@ -118,11 +121,23 @@ RULES:
 4. If fewer than 5 valid points exist, respond with: "Insufficient content for summary"
 5. Format: Bullet points using dashes (-)
 6. Use only factual statements from the article text
+7. If there are direct quotes in the article, select the most important one (often the first quote, but use your judgment)
+8. The quote should be on a line starting with "QUOTE: " followed by the quote text in quotation marks and attribution
+9. Format for quotes: QUOTE: "quote text" -- Speaker Name
 
 Article:
 {}
 
-Provide exactly 5 bullet points summarizing the key information."#,
+Format your response as:
+QUOTE: "the most important quote if one exists" -- Speaker Name
+- First key point
+- Second key point
+- Third key point
+- Fourth key point
+- Fifth key point
+
+If there are no quotes in the article, omit the QUOTE line entirely.
+If there's a quote but no clear speaker attribution in the article, omit the QUOTE line."#,
             truncated_content
         );
 
@@ -166,16 +181,56 @@ Provide exactly 5 bullet points summarizing the key information."#,
             return Ok(Summary::Insufficient);
         }
 
-        let bullets = self.parse_bullet_points(summary_text);
+        let (quote, bullets) = self.parse_summary_with_quote(summary_text);
 
         if bullets.len() == 5 {
-            Ok(Summary::Success(bullets))
+            Ok(Summary::Success { points: bullets, quote })
         } else {
             Ok(Summary::Failed(format!(
                 "Expected 5 bullets, got {}",
                 bullets.len()
             )))
         }
+    }
+
+    fn parse_summary_with_quote(&self, text: &str) -> (Option<String>, Vec<String>) {
+        let mut quote = None;
+        let mut bullets = Vec::new();
+
+        for line in text.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            // Check for quote line
+            if trimmed.starts_with("QUOTE:") {
+                let quote_text = trimmed.strip_prefix("QUOTE:").unwrap().trim();
+                // Keep the quote as-is (it already includes quotes and attribution)
+                if !quote_text.is_empty() {
+                    quote = Some(quote_text.to_string());
+                }
+                continue;
+            }
+
+            // Check for bullet points
+            if let Some(stripped) = trimmed.strip_prefix(|c: char| c.is_numeric()) {
+                let stripped = stripped.trim_start_matches(|c: char| c == '.' || c == ')' || c.is_whitespace());
+                if !stripped.is_empty() {
+                    bullets.push(stripped.to_string());
+                }
+                continue;
+            }
+
+            if trimmed.starts_with('-') || trimmed.starts_with('*') || trimmed.starts_with('•') {
+                let stripped = trimmed[1..].trim();
+                if !stripped.is_empty() {
+                    bullets.push(stripped.to_string());
+                }
+            }
+        }
+
+        (quote, bullets)
     }
 
     fn parse_bullet_points(&self, text: &str) -> Vec<String> {

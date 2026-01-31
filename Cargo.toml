@@ -1,10 +1,11 @@
-[package]
-name = "podcast-briefing"
-version = "0.1.0"
-edition = "2021"
-authors = ["Leo Laporte"]
+[workspace]
+members = [
+    "crates/collect-stories",
+    "crates/shared",
+]
+resolver = "2"
 
-[dependencies]
+[workspace.dependencies]
 reqwest = { version = "0.13", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }

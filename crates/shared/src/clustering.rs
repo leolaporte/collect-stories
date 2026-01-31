@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::summarizer::Summary;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Story {
     pub title: String,
     pub url: String,
@@ -12,7 +12,7 @@ pub struct Story {
     pub summary: Summary,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Topic {
     pub title: String,
     pub stories: Vec<Story>,
@@ -94,7 +94,7 @@ impl TopicClusterer {
             .enumerate()
             .map(|(idx, story)| {
                 let first_point = match &story.summary {
-                    Summary::Success(points) => points.first().map(|s| s.as_str()).unwrap_or(""),
+                    Summary::Success { points, .. } => points.first().map(|s| s.as_str()).unwrap_or(""),
                     _ => "",
                 };
                 format!("{}: {} - {}", idx, story.title, first_point)

@@ -1,0 +1,18 @@
+[package]
+name = "shared"
+version = "0.1.0"
+edition = "2021"
+authors = ["Leo Laporte"]
+
+[dependencies]
+reqwest = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+dotenvy = { workspace = true }
+html2text = { workspace = true }
+urlencoding = { workspace = true }
+dirs = { workspace = true }

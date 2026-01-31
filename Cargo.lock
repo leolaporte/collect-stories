@@ -218,6 +218,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "collect-stories"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "shared",
+ "tokio",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1053,24 +1064,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
-name = "podcast-briefing"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "dirs",
- "dotenvy",
- "futures",
- "html2text",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "urlencoding",
-]
-
-[[package]]
 name = "potential_utf"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1467,6 +1460,23 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
+]
+
+[[package]]
+name = "shared"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "dirs",
+ "dotenvy",
+ "futures",
+ "html2text",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "urlencoding",
 ]
 
 [[package]]

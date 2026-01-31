@@ -1,20 +1,12 @@
-mod briefing;
-mod clustering;
-mod config;
-mod extractor;
-mod raindrop;
-mod summarizer;
-
 use anyhow::{Context, Result};
-use briefing::BriefingGenerator;
 use chrono::{Duration, Utc};
-use clustering::{Story, TopicClusterer};
-use config::Config;
-use extractor::ContentExtractor;
-use raindrop::RaindropClient;
+use clap::Parser;
+use shared::{
+    ClaudeSummarizer, Config, ContentExtractor, RaindropClient, ShowInfo, Story, Summary,
+    TopicClusterer,
+};
 use std::collections::HashMap;
-use std::io::{self, Write};
-use summarizer::{ClaudeSummarizer, Summary};
+use std::io::{self as stdio, Write};
 
 #[derive(Debug, Clone, Copy)]
 enum Show {
@@ -24,27 +16,20 @@ enum Show {
 }
 
 impl Show {
-    fn tag(&self) -> &'static str {
+    fn info(&self) -> ShowInfo {
         match self {
-            Show::TWiT => "#twit",
-            Show::MacBreakWeekly => "#mbw",
-            Show::IntelligentMachines => "#im",
+            Show::TWiT => ShowInfo::new("TWiT", "twit", "#twit"),
+            Show::MacBreakWeekly => ShowInfo::new("MacBreak Weekly", "mbw", "#mbw"),
+            Show::IntelligentMachines => ShowInfo::new("Intelligent Machines", "im", "#im"),
         }
     }
 
-    fn name(&self) -> &'static str {
-        match self {
-            Show::TWiT => "TWiT",
-            Show::MacBreakWeekly => "MacBreak Weekly",
-            Show::IntelligentMachines => "Intelligent Machines",
-        }
-    }
-
-    fn slug(&self) -> &'static str {
-        match self {
-            Show::TWiT => "twit",
-            Show::MacBreakWeekly => "mbw",
-            Show::IntelligentMachines => "im",
+    fn from_slug(slug: &str) -> Option<Self> {
+        match slug {
+            "twit" => Some(Show::TWiT),
+            "mbw" => Some(Show::MacBreakWeekly),
+            "im" => Some(Show::IntelligentMachines),
+            _ => None,
         }
     }
 }
@@ -55,10 +40,10 @@ fn prompt_show_selection() -> Result<Show> {
     println!("  2) MacBreak Weekly");
     println!("  3) Intelligent Machines");
     print!("\nEnter your choice (1-3): ");
-    io::stdout().flush()?;
+    stdio::stdout().flush()?;
 
     let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
+    stdio::stdin().read_line(&mut input)?;
 
     match input.trim() {
         "1" => Ok(Show::TWiT),
@@ -68,25 +53,50 @@ fn prompt_show_selection() -> Result<Show> {
     }
 }
 
+#[derive(Parser)]
+#[command(name = "collect-stories")]
+#[command(about = "Collect and summarize stories from Raindrop.io for podcast briefing")]
+struct Args {
+    /// Show to collect stories for (twit, mbw, im)
+    #[arg(short, long)]
+    show: Option<String>,
+
+    /// Number of days to look back for bookmarks
+    #[arg(short, long, default_value = "7")]
+    days: i64,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args = Args::parse();
     let config = Config::from_env()?;
-    let show = prompt_show_selection()?;
 
-    println!("\n✓ Selected: {}", show.name());
+    // Determine which show to use
+    let show = if let Some(slug) = args.show {
+        Show::from_slug(&slug)
+            .ok_or_else(|| anyhow::anyhow!("Invalid show: {}. Use 'twit', 'mbw', or 'im'", slug))?
+    } else {
+        prompt_show_selection()?
+    };
+
+    let show_info = show.info();
+    println!("\n✓ Selected: {}", show_info.name);
 
     let now = Utc::now();
-    let since = now - Duration::days(7);
+    let since = now - Duration::days(args.days);
 
     println!("\n📚 Fetching bookmarks from Raindrop.io...");
     let raindrop_client = RaindropClient::new(config.raindrop_api_token)?;
     let bookmarks = raindrop_client
-        .fetch_bookmarks(show.tag(), since)
+        .fetch_bookmarks(&show_info.tag, since)
         .await
         .context("Failed to fetch bookmarks")?;
 
     if bookmarks.is_empty() {
-        println!("No bookmarks found with tag {} in the past 7 days.", show.tag());
+        println!(
+            "No bookmarks found with tag {} in the past {} days.",
+            show_info.tag, args.days
+        );
         return Ok(());
     }
 
@@ -97,7 +107,7 @@ async fn main() -> Result<()> {
     let urls: Vec<String> = bookmarks.iter().map(|b| b.link.clone()).collect();
     let content_results = extractor.fetch_articles_parallel(urls).await;
 
-    // Create a map of URL -> Content for correct pairing (buffer_unordered returns in random order)
+    // Create a map of URL -> Content for correct pairing
     let content_map: HashMap<String, String> = content_results
         .into_iter()
         .filter_map(|(url, content)| content.map(|c| (url, c)))
@@ -106,7 +116,9 @@ async fn main() -> Result<()> {
     let articles_with_content: Vec<_> = bookmarks
         .iter()
         .filter_map(|bookmark| {
-            content_map.get(&bookmark.link).map(|content| (bookmark, content.clone()))
+            content_map
+                .get(&bookmark.link)
+                .map(|content| (bookmark, content.clone()))
         })
         .collect();
 
@@ -134,12 +146,12 @@ async fn main() -> Result<()> {
         .map(|(bookmark, content)| (bookmark.link.clone(), content.clone()))
         .collect();
 
-    let summary_results = summarizer.summarize_articles_parallel(articles_for_summary).await;
+    let summary_results = summarizer
+        .summarize_articles_parallel(articles_for_summary)
+        .await;
 
     // Create a map of URL -> Summary for correct pairing
-    let summary_map: HashMap<String, Summary> = summary_results
-        .into_iter()
-        .collect();
+    let summary_map: HashMap<String, Summary> = summary_results.into_iter().collect();
 
     let stories: Vec<Story> = articles_with_content
         .iter()
@@ -155,10 +167,14 @@ async fn main() -> Result<()> {
 
     let successful_summaries = stories
         .iter()
-        .filter(|s| matches!(s.summary, Summary::Success(_)))
+        .filter(|s| matches!(s.summary, Summary::Success { .. }))
         .count();
 
-    println!("✓ Successfully summarized {}/{} articles", successful_summaries, stories.len());
+    println!(
+        "✓ Successfully summarized {}/{} articles",
+        successful_summaries,
+        stories.len()
+    );
 
     println!("\n🔗 Clustering stories by topic...");
     let clusterer = TopicClusterer::new(config.anthropic_api_key)?;
@@ -169,23 +185,14 @@ async fn main() -> Result<()> {
 
     println!("✓ Organized into {} topics", topics.len());
 
-    println!("\n📝 Generating briefing document...");
-    let briefing_content = BriefingGenerator::generate(&topics, show.name(), now);
-    let filepath = BriefingGenerator::save(&briefing_content, show.slug(), now)
-        .context("Failed to save briefing")?;
+    println!("\n📝 Generating org-mode document...");
+    let org_content =
+        shared::briefing::BriefingGenerator::generate_org_mode(&topics, &show_info.name, now);
+    let org_filepath =
+        shared::briefing::BriefingGenerator::save_org_mode(&org_content, &show_info.slug, now)
+            .context("Failed to save org-mode file")?;
 
-    println!("📊 Generating links spreadsheet...");
-    let links_csv = BriefingGenerator::generate_links_csv(&topics);
-    let csv_filepath = BriefingGenerator::save_links_csv(&links_csv, show.slug(), now)
-        .context("Failed to save links CSV")?;
-
-    println!("\n✅ Briefing saved to: {}", filepath.display());
-    println!("✅ Links CSV saved to: {}", csv_filepath.display());
-    println!("\nSummary:");
-    println!("  • {} bookmarks found", bookmarks.len());
-    println!("  • {} articles extracted", articles_with_content.len());
-    println!("  • {} articles summarized", successful_summaries);
-    println!("  • {} topics identified", topics.len());
+    println!("\n✅ Org-mode document saved to: {}", org_filepath.display());
 
     Ok(())
 }

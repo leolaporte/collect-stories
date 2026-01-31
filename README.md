@@ -1,6 +1,6 @@
 # Podcast Briefing Tool
 
-A Rust CLI tool that fetches bookmarked articles from Raindrop.io, summarizes them using Claude Haiku, groups related stories by topic, and generates a markdown briefing document for TWiT, MacBreak Weekly, or Intelligent Machines podcasts.
+A Rust CLI tool that fetches bookmarked articles from Raindrop.io, summarizes them using Claude Haiku, groups related stories by topic, and generates an Emacs org-mode briefing document for TWiT, MacBreak Weekly, or Intelligent Machines podcasts.
 
 ## Features
 
@@ -8,7 +8,19 @@ A Rust CLI tool that fetches bookmarked articles from Raindrop.io, summarizes th
 - **Article Extraction**: Parallel web scraping with retry logic
 - **AI Summarization**: 5-bullet summaries using Claude Haiku 4.5
 - **Topic Clustering**: Groups related articles automatically
-- **Markdown Output**: Clean, formatted briefing documents
+- **Org-Mode Output**: Clean, structured Emacs org-mode documents
+- **Simple Workflow**: One command generates your briefing
+
+## How It Works
+
+Run `collect-stories` to:
+1. Fetch bookmarks from Raindrop.io (tagged with show)
+2. Extract article content in parallel
+3. Summarize each article with Claude AI
+4. Cluster stories by topic (companies or categories)
+5. Generate org-mode document in `~/Documents/`
+
+**Output**: `~/Documents/{show}-{date}.org` ready to open in Emacs!
 
 ## Setup
 
@@ -23,14 +35,17 @@ A Rust CLI tool that fetches bookmarked articles from Raindrop.io, summarizes th
 1. Clone and build:
 ```bash
 cd ~/Projects/podcast-briefing
-cargo build --release
-cp target/release/podcast-briefing ~/.local/bin/
+cargo build --release --workspace
+cp target/release/collect-stories ~/.local/bin/
 ```
 
-2. Create `.env` file:
+2. Create environment file:
 ```bash
-cp .env.example .env
-# Edit .env and add your API tokens
+mkdir -p ~/.config/podcast-briefing
+cat > ~/.config/podcast-briefing/.env << 'EOF'
+RAINDROP_API_TOKEN=your_raindrop_token_here
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+EOF
 ```
 
 ### Environment Variables
@@ -50,140 +65,187 @@ The tool searches for `.env` in these locations (in order):
 
 ## Usage
 
-Run the tool:
+Run `collect-stories` to generate your briefing:
 
 ```bash
-podcast-briefing
+# Interactive mode (prompts for show selection)
+collect-stories
+
+# Non-interactive mode
+collect-stories --show twit
+collect-stories --show mbw --days 14
 ```
 
-You'll be prompted to select a show:
-1. TWiT
-2. MacBreak Weekly
-3. Intelligent Machines
+**Options:**
+- `--show <slug>` - Show to collect for: `twit`, `mbw`, or `im` (default: interactive prompt)
+- `--days <num>` - Number of days to look back (default: 7)
 
 The tool will:
-1. Fetch bookmarks with the corresponding tag from Raindrop.io (past 7 days)
-2. Extract article content in parallel
-3. Summarize each article using Claude Haiku
-4. Group articles by company (Apple, Google, Tesla, etc.) or general topic
-5. Generate two files:
-   - **HTML briefing** with collapsible sections: `~/Documents/{show-slug}-{date}.html`
-   - **CSV links file** for Google Sheets: `~/Documents/{show-slug}-{date}-LINKS.csv`
+1. 📚 Fetch bookmarks with the corresponding tag from Raindrop.io
+2. 🌐 Extract article content in parallel
+3. 🤖 Summarize each article using Claude Haiku
+4. 🔗 Group articles by company or topic
+5. 📝 Generate org-mode document
+
+**Output:** `~/Documents/{show}-{date}.org`
+
+Then open in Emacs:
+```bash
+emacsclient ~/Documents/twit-2026-01-31.org
+```
 
 ## Show Tags
+
+Tag your bookmarks in Raindrop.io with these tags:
 
 - TWiT: `#twit`
 - MacBreak Weekly: `#mbw`
 - Intelligent Machines: `#im`
 
-Tag your bookmarks in Raindrop.io with these tags for the tool to find them.
+## Org-Mode Output Format
 
-## Output Format
+`collect-stories` generates an Emacs org-mode document in `~/Documents/`:
 
-The tool generates an **HTML file** with:
-- **Collapsible summaries**: Click "Summary" to collapse/expand bullet points
-- **Clickable links**: All article URLs are hyperlinked
-- **Clean styling**: Professional appearance with color-coded sections
-- **Proper heading hierarchy**: H1 (title) → H2 (topics) → H3 (articles)
+```org
+#+TITLE: TWiT Briefing - 2026-01-31
+#+DATE: 2026-01-31
 
-### Using with Google Docs
+* Apple
 
-**Method 1: Direct open (preserves collapsible sections)**
-1. Open the HTML file in your browser (double-click it)
-2. View and navigate with collapsible sections working
+** Apple unveils new MacBook Pro
 
-**Method 2: Import to Google Docs (for editing)**
-1. Go to [Google Docs](https://docs.google.com)
-2. File → Open → Upload the HTML file
-3. Google Docs will convert it and create a **Document Outline** in the left sidebar
-4. Use the outline to navigate between topics and articles
-5. Note: Collapsible sections become regular bullet lists in Google Docs
+*** URL
+https://example.com/article
 
-**Method 3: Copy/Paste**
-1. Open the HTML file in a browser
-2. Select all (Ctrl+A) and copy (Ctrl+C)
-3. Paste into a new Google Doc
-4. Use View → Show document outline for navigation
+*** Summary
+- First key point
+- Second key point
+- Third key point
 
-### HTML Structure
-```html
-<h1>Show Name Briefing - YYYY-MM-DD</h1>
+* Google
 
-<h2>Apple</h2>
+** Google releases Gemini update
 
-<h3>Apple unveils new MacBook Pro</h3>
-Link: [clickable URL]
-Date: Wednesday, 01/29/2026 3:17 AM
+*** URL
+https://example.com/article2
 
-<details open>
-  <summary>Summary (click to collapse)</summary>
-  <ul>
-    <li>First key point</li>
-    <li>Second key point</li>
-    <li>Third key point</li>
-    <li>Fourth key point</li>
-    <li>Fifth key point</li>
-  </ul>
-</details>
+*** Summary
+- Key point about Gemini
+- Another important detail
 ```
 
-### Links CSV Format
+**Org-mode structure:**
+- Level 1 (`*`) - Topic names (company or category)
+- Level 2 (`**`) - Article titles
+- Level 3 (`***`) - URL and Summary sections
+- Summary bullets use standard org-mode list format (`-`)
 
-The tool also generates a CSV file suitable for importing into Google Sheets:
+**Using in Emacs:**
+- Open the `.org` file in Emacs
+- Use `TAB` to fold/unfold sections
+- Navigate with `C-c C-n` (next heading) and `C-c C-p` (previous heading)
+- Export to other formats with `C-c C-e` (org-export)
 
-**Format:**
-- Column A: (blank)
-- Column B: Topic title (on first article row only)
-- Column C: Article titles
-- Column D: (blank)
-- Column E: Article URLs
+## Workflow Examples
 
-**Example:**
+**Basic workflow:**
+```bash
+# Collect and generate briefing
+collect-stories --show twit
+# Output: ~/Documents/twit-2026-01-31.org
+
+# Open in Emacs
+emacsclient ~/Documents/twit-2026-01-31.org
 ```
-,Apple,Apple unveils new MacBook Pro,,https://example.com/article1
-,,New M4 chip benchmarks released,,https://example.com/article2
-,,,,
-,Google,Google releases Gemini update,,https://example.com/article3
-,,Google Photos adds new AI features,,https://example.com/article4
-,,,,
-,AI Development,OpenAI announces new GPT model,,https://example.com/article5
-```
 
-**To use in Google Sheets:**
-1. Open Google Sheets
-2. File → Import → Upload the CSV file
-3. Select "Comma" as the separator
-4. Optionally:
-   - Bold column B to make topics stand out
-   - Adjust column widths for better readability
+**Different time ranges:**
+```bash
+collect-stories --show mbw --days 14  # Last 2 weeks
+collect-stories --show im --days 3    # Last 3 days
+```
 
 ## Cost Estimate
 
-- Claude Haiku 4.5: ~$0.001 per article
+- Claude Haiku 4.5: ~$0.001 per article (summarization + clustering)
 - For 100 articles: <$0.10 total
 
 ## Error Handling
 
-The tool gracefully handles:
-- Paywalled articles → "No summary available"
-- Unreachable URLs → Retry with exponential backoff
-- Rate limits → Automatic throttling
-- Failed clustering → Chronological fallback
+The tools gracefully handle:
+- **Missing API keys**: Helpful error messages with setup instructions
+- **Invalid story files**: Version validation and corruption detection
+- **Paywalled articles**: Marked as "No summary available"
+- **Unreachable URLs**: Retry with exponential backoff
+- **Rate limits**: Automatic throttling and retry
+- **Failed clustering**: Chronological fallback
+
+## Troubleshooting
+
+**Problem:** `RAINDROP_API_TOKEN not found`
+- **Solution:** Create `~/.config/podcast-briefing/.env` with your API tokens
+
+**Problem:** No bookmarks found
+- **Solution:** Check that you've tagged bookmarks in Raindrop.io with the correct tag (`#twit`, `#mbw`, or `#im`)
+
+**Problem:** Articles failing to extract
+- **Solution:** Some sites are paywalled or block scraping - this is normal, the tool will skip them
+
+**Problem:** Rate limits from Claude API
+- **Solution:** The tool automatically throttles and retries with exponential backoff
 
 ## Development
 
-Build and run in development:
+Build the workspace:
 ```bash
-cargo run
+cargo build --workspace
+```
+
+Build for release:
+```bash
+cargo build --release --workspace
+cp target/release/collect-stories ~/.local/bin/
+```
+
+Run in development:
+```bash
+cargo run -p collect-stories
+cargo run -p prepare-briefing
 ```
 
 Run tests:
 ```bash
-cargo test
+cargo test --workspace
 ```
 
 Check code:
 ```bash
-cargo check
-cargo clippy
+cargo check --workspace
+cargo clippy --workspace
 ```
+
+## Project Structure
+
+```
+podcast-briefing/
+├── Cargo.toml              # Workspace manifest
+└── crates/
+    ├── collect-stories/    # Main binary
+    │   ├── Cargo.toml
+    │   └── src/main.rs
+    ├── prepare-briefing/   # Optional: HTML/CSV generation
+    │   ├── Cargo.toml
+    │   └── src/main.rs
+    └── shared/             # Shared library
+        ├── Cargo.toml
+        └── src/
+            ├── config.rs      # Environment configuration
+            ├── raindrop.rs    # Raindrop.io API client
+            ├── extractor.rs   # Web scraping
+            ├── summarizer.rs  # Claude AI summarization
+            ├── clustering.rs  # Topic clustering
+            └── briefing.rs    # Org-mode/HTML/CSV generation
+```
+
+## License
+
+MIT

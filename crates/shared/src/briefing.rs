@@ -20,6 +20,31 @@ impl BriefingGenerator {
         }
     }
 
+    fn calculate_next_show_date(show_name: &str, from_date: DateTime<Utc>) -> String {
+        use chrono::{Datelike, Weekday};
+
+        let target_weekday = match show_name {
+            "TWiT" => Weekday::Sun,
+            "MacBreak Weekly" => Weekday::Tue,
+            "Intelligent Machines" => Weekday::Wed,
+            _ => Weekday::Sun, // Default to Sunday
+        };
+
+        let current_day = from_date.weekday().num_days_from_monday();
+        let target_day = target_weekday.num_days_from_monday();
+
+        let days_until_target = if current_day <= target_day {
+            target_day - current_day
+        } else {
+            7 - (current_day - target_day)
+        };
+
+        let next_show = from_date + chrono::Duration::days(days_until_target as i64);
+
+        // Format as "Sun, 1 February 2026"
+        next_show.format("%a, %-d %B %Y").to_string()
+    }
+
     pub fn generate(topics: &[Topic], show_name: &str, date: DateTime<Utc>) -> String {
         let mut html = String::new();
 
@@ -77,9 +102,12 @@ impl BriefingGenerator {
                 html.push_str("    </div>\n");
 
                 match &story.summary {
-                    Summary::Success(points) => {
+                    Summary::Success { points, quote } => {
                         html.push_str("    <details class=\"article\" open>\n");
                         html.push_str("      <summary></summary>\n");
+                        if let Some(q) = quote {
+                            html.push_str(&format!("      <p><em>\"{}\"</em></p>\n", Self::escape_html(q)));
+                        }
                         html.push_str("      <ul>\n");
                         for point in points.iter() {
                             html.push_str(&format!("        <li>{}</li>\n", Self::escape_html(point)));
@@ -171,6 +199,69 @@ impl BriefingGenerator {
         let filepath = documents_dir.join(&filename);
 
         fs::write(&filepath, content).context("Failed to write links CSV file")?;
+
+        Ok(filepath)
+    }
+
+    pub fn generate_org_mode(topics: &[Topic], show_name: &str, date: DateTime<Utc>) -> String {
+        let mut org = String::new();
+
+        let next_show_date = Self::calculate_next_show_date(show_name, date);
+
+        // Properties
+        org.push_str(&format!("#+TITLE: {} Briefing Book\n", show_name));
+        org.push_str(&format!("#+DATE: {}\n\n", next_show_date));
+
+        // Topics
+        for topic in topics {
+            org.push_str(&format!("* {}\n\n", topic.title));
+
+            for story in &topic.stories {
+                // Article title
+                org.push_str(&format!("** {}\n\n", story.title));
+
+                // URL
+                org.push_str(&format!("*** URL\n{}\n\n", story.url));
+
+                // Summary
+                org.push_str("*** Summary\n");
+                match &story.summary {
+                    Summary::Success { points, quote } => {
+                        // Add quote first if it exists (quote already includes quotes and attribution)
+                        if let Some(q) = quote {
+                            org.push_str(&format!("{}\n\n", q));
+                        }
+                        // Add bullet points
+                        for point in points {
+                            org.push_str(&format!("- {}\n", point));
+                        }
+                    }
+                    Summary::Insufficient => {
+                        org.push_str("Summary unavailable\n");
+                    }
+                    Summary::Failed(_) => {
+                        org.push_str("Summary unavailable\n");
+                    }
+                }
+                org.push_str("\n");
+            }
+        }
+
+        // Add three empty topics at the end
+        org.push_str("* Back of the Book\n\n");
+        org.push_str("* Leo's Picks\n\n");
+        org.push_str("* In Memoriam\n\n");
+
+        org
+    }
+
+    pub fn save_org_mode(content: &str, show_slug: &str, date: DateTime<Utc>) -> Result<PathBuf> {
+        let filename = format!("{}-{}.org", show_slug, date.format("%Y-%m-%d"));
+
+        let documents_dir = dirs::document_dir().unwrap_or_else(|| PathBuf::from("."));
+        let filepath = documents_dir.join(&filename);
+
+        fs::write(&filepath, content).context("Failed to write org-mode file")?;
 
         Ok(filepath)
     }

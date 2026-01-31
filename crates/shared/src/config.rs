@@ -13,10 +13,22 @@ impl Config {
         Self::try_load_dotenv();
 
         let raindrop_api_token = env::var("RAINDROP_API_TOKEN")
-            .context("RAINDROP_API_TOKEN not found. Set it as an environment variable or create ~/.config/podcast-briefing/.env")?;
+            .context(
+                "RAINDROP_API_TOKEN not found.\n\n\
+                To fix this, create ~/.config/podcast-briefing/.env with:\n  \
+                RAINDROP_API_TOKEN=your_token_here\n  \
+                ANTHROPIC_API_KEY=your_key_here\n\n\
+                Get your Raindrop.io API token from: https://app.raindrop.io/settings/integrations"
+            )?;
 
         let anthropic_api_key = env::var("ANTHROPIC_API_KEY")
-            .context("ANTHROPIC_API_KEY not found. Set it as an environment variable or create ~/.config/podcast-briefing/.env")?;
+            .context(
+                "ANTHROPIC_API_KEY not found.\n\n\
+                To fix this, create ~/.config/podcast-briefing/.env with:\n  \
+                RAINDROP_API_TOKEN=your_token_here\n  \
+                ANTHROPIC_API_KEY=your_key_here\n\n\
+                Get your Anthropic API key from: https://console.anthropic.com/settings/keys"
+            )?;
 
         Ok(Self {
             raindrop_api_token,
