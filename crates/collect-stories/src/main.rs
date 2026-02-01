@@ -6,6 +6,7 @@ use shared::{
     Summary, TopicClusterer,
 };
 use std::collections::HashMap;
+use std::fs::OpenOptions;
 use std::io::{self as stdio, Write};
 
 #[derive(Debug, Clone, Copy)]
@@ -31,6 +32,18 @@ impl Show {
             "im" => Some(Show::IntelligentMachines),
             _ => None,
         }
+    }
+}
+
+fn log_error(message: &str) {
+    let log_path = "/tmp/collect-stories-errors.log";
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)
+    {
+        let timestamp = Utc::now().format("%Y-%m-%d %H:%M:%S");
+        let _ = writeln!(file, "[{}] {}", timestamp, message);
     }
 }
 
@@ -121,15 +134,15 @@ async fn main() -> Result<()> {
         successful_extractions,
         bookmarks.len()
     );
+
+    // Log failed extractions to error log
     if failed_count > 0 {
-        println!(
-            "\n⚠ Failed to extract {} articles (will use Raindrop metadata):",
-            failed_count
-        );
         for bookmark in &bookmarks {
             if !content_map.contains_key(&bookmark.link) {
-                println!("  ✗ \"{}\"", bookmark.title);
-                println!("    URL: {}", bookmark.link);
+                log_error(&format!(
+                    "Failed to extract article: \"{}\" - URL: {}",
+                    bookmark.title, bookmark.link
+                ));
             }
         }
     }

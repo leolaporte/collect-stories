@@ -2,9 +2,21 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use clap::Parser;
 use shared::{Story, Summary, Topic};
-use std::fs;
+use std::fs::{self, OpenOptions};
 use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
+
+fn log_error(message: &str) {
+    let log_path = "/tmp/prepare-briefing-errors.log";
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)
+    {
+        let timestamp = Utc::now().format("%Y-%m-%d %H:%M:%S");
+        let _ = writeln!(file, "[{}] {}", timestamp, message);
+    }
+}
 
 #[derive(Parser)]
 #[command(name = "prepare-briefing")]
