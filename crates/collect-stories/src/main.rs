@@ -18,7 +18,7 @@ enum Show {
 impl Show {
     fn info(&self) -> ShowInfo {
         match self {
-            Show::TWiT => ShowInfo::new("TWiT", "twit", "#twit"),
+            Show::TWiT => ShowInfo::new("This Week in Tech", "twit", "#twit"),
             Show::MacBreakWeekly => ShowInfo::new("MacBreak Weekly", "mbw", "#mbw"),
             Show::IntelligentMachines => ShowInfo::new("Intelligent Machines", "im", "#im"),
         }
@@ -129,7 +129,13 @@ async fn main() -> Result<()> {
         bookmarks.len()
     );
     if failed_count > 0 {
-        println!("  ({} articles could not be extracted)", failed_count);
+        println!("\n⚠ Failed to extract {} articles:", failed_count);
+        for bookmark in &bookmarks {
+            if !content_map.contains_key(&bookmark.link) {
+                println!("  ✗ \"{}\"", bookmark.title);
+                println!("    URL: {}", bookmark.link);
+            }
+        }
     }
 
     if articles_with_content.is_empty() {

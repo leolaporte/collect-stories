@@ -17,3 +17,6 @@ html2text = { workspace = true }
 urlencoding = { workspace = true }
 dirs = { workspace = true }
 scraper = { workspace = true }
+rusqlite = { workspace = true }
+cookie_store = { workspace = true }
+url = { workspace = true }

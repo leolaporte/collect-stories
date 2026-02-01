@@ -2,6 +2,7 @@
 pub mod briefing;
 pub mod clustering;
 pub mod config;
+pub mod cookies;
 pub mod extractor;
 pub mod io;
 pub mod models;

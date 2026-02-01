@@ -87,9 +87,11 @@ impl BriefingGenerator {
         ));
 
         // Topics
-        for topic in topics {
+        for (index, topic) in topics.iter().enumerate() {
             html.push_str("<details class=\"topic\">\n");
-            html.push_str(&format!("  <summary><h2>{}</h2></summary>\n", Self::escape_html(&topic.title)));
+            html.push_str(&format!("  <summary><h2>{}. {}</h2></summary>\n",
+                index + 1,
+                Self::escape_html(&topic.title)));
             html.push_str("  <div>\n");
 
             for story in &topic.stories {
