@@ -17,11 +17,14 @@ Converts manually-edited org-mode documents to HTML and CSV formats ready for up
 ### collect-stories
 
 - **Raindrop.io Integration**: Fetches tagged bookmarks from configurable date ranges
+- **Browser Cookie Support**: Accesses paywalled articles using Chrome/Firefox cookies
+- **Complete Bookmark Inclusion**: ALL tagged bookmarks appear in output, even if extraction fails
 - **Parallel Article Extraction**: Concurrent web scraping with retry logic and rate limiting
 - **Publication Date Extraction**: Automatically extracts article publication dates from HTML metadata
 - **AI Summarization**: 5-bullet summaries with optional quotes using Claude Haiku 4.5
 - **Intelligent Topic Clustering**: Groups related articles by company or category with AI
 - **Rate Limit Handling**: Automatic retry with exponential backoff for API rate limits
+- **Error Logging**: Failed extractions logged to `/tmp/collect-stories-errors.log`
 - **Org-Mode Output**: Clean, structured Emacs org-mode documents
 
 ### prepare-briefing
@@ -312,6 +315,52 @@ Blank rows separate topics for easy reading.
 
 ## Advanced Features
 
+### Browser Cookie Support
+
+`collect-stories` automatically loads browser cookies to access paywalled content:
+
+**Supported Browsers:**
+- **Chrome/Chromium** (tried first)
+  - Cookie database: `~/.config/google-chrome/Default/Cookies`
+  - Uses Windows FILETIME epoch for timestamps
+- **Firefox** (fallback)
+  - Cookie database: `~/.mozilla/firefox/*/cookies.sqlite`
+  - Uses Unix epoch for timestamps
+
+**How it works:**
+1. Loads cookies from browser database before fetching articles
+2. Filters expired cookies automatically
+3. Applies relevant cookies to each article request
+4. Enables access to Forbes, WSJ, NYT, and other paywalled sites you're logged into
+
+**Requirements:**
+- You must be logged into the site in your browser
+- Browser must store persistent cookies (not incognito/private mode)
+- Works with sites you have active subscriptions to
+
+**Privacy note:** Cookies are only read locally and used for article fetching. They are never uploaded or shared.
+
+### Complete Bookmark Preservation
+
+**All bookmarks with the proper tag appear in the org file**, regardless of extraction success:
+
+**For successfully extracted articles:**
+- Full AI-generated summary with 5 bullet points
+- Optional quote from article
+- Extracted publication date
+
+**For failed extractions:**
+- Title and URL from Raindrop bookmark
+- Bookmark creation date
+- "Summary not available" placeholder
+- Error logged to `/tmp/collect-stories-errors.log`
+
+**Why this matters:**
+- No bookmarks are lost due to paywalls or scraping issues
+- You can manually research failed articles later
+- Complete audit trail of all tagged content
+- Easy to identify which sites need alternative access
+
 ### Publication Date Extraction
 
 `collect-stories` automatically extracts article publication dates from HTML metadata:
@@ -364,9 +413,20 @@ No bookmarks found with tag #twit in the past 7 days.
 ```
 
 **Paywalled/unreachable articles:**
-- Skipped automatically
-- Marked as "Summary unavailable" if no content extracted
+- All bookmarks included in org file (never lost)
+- Successfully extracted: Full AI summary
+- Failed extractions: "Summary not available" placeholder
 - Progress shown: "✓ Successfully extracted content from 42/50 articles"
+- Errors logged to `/tmp/collect-stories-errors.log` with timestamps
+
+**Viewing extraction errors:**
+```bash
+# Recent errors
+tail -f /tmp/collect-stories-errors.log
+
+# All errors from this session
+cat /tmp/collect-stories-errors.log
+```
 
 **Rate limits:**
 ```
@@ -412,13 +472,27 @@ EOF
 
 ### Problem: Many articles failing to extract
 
-**Solution:** This is normal. Some sites:
-- Are paywalled (WSJ, NYT, etc.)
-- Block web scrapers with anti-bot protection
-- Require JavaScript to load content
-- Have restrictive robots.txt
+**Good news:** All bookmarks are preserved in the org file, even if extraction fails!
 
-The tools will skip these and continue with successfully extracted articles.
+**Common extraction failures:**
+- **Paywalled sites** (WSJ, NYT, Forbes, etc.)
+  - Solution: Log into the site in Chrome or Firefox before running collect-stories
+  - The tool uses your browser cookies to access paywalled content
+- **Anti-bot protection** (Cloudflare, Imperva, etc.)
+  - Some sites block automated scrapers
+  - These will show "Summary not available" in org file
+- **JavaScript-required sites**
+  - Sites that load content dynamically may not work
+  - Consider bookmarking the direct article URL instead of aggregator links
+- **Restrictive robots.txt**
+  - Some sites block web crawlers entirely
+
+**Check error log for details:**
+```bash
+tail /tmp/collect-stories-errors.log
+```
+
+**Manual fallback:** Failed articles appear in your org file with title and URL, so you can manually review them before the show.
 
 ### Problem: Rate limits from Claude API
 
@@ -538,6 +612,9 @@ collect-stories/
 - **chrono** - Date/time parsing and formatting
 - **html2text** - HTML to text conversion
 - **scraper** - HTML parsing for metadata extraction
+- **rusqlite** - Browser cookie database access (Chrome/Firefox)
+- **cookie_store** - Cookie management and parsing
+- **url** - URL parsing for cookie domain matching
 - **clap** - Command-line argument parsing
 - **dirs** - Platform-specific directory paths
 
