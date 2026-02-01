@@ -184,6 +184,62 @@ cp target/release/prepare-briefing ~/.local/bin/
 
 Leo Laporte
 
-## Session Date
+## Recent Changes (2026-02-01)
 
-2026-01-31
+### Browser Cookie Support for Paywalled Sites
+
+**Problem:** Articles behind paywalls (Forbes, WSJ, NYT, etc.) were failing to fetch even when user is logged in via browser.
+
+**Solution:** Implemented browser cookie loading to access authenticated content:
+
+**Key Implementation Details:**
+- **Chrome Cookies:** Uses Windows FILETIME epoch (microseconds since Jan 1, 1601)
+  - Timestamp calculation: `(unix_timestamp + 11_644_473_600) * 1_000_000`
+  - Database: `~/.config/google-chrome/Default/Cookies`
+  - Table: `cookies` with `host_key`, `expires_utc` columns
+
+- **Firefox Cookies:** Uses Unix epoch (seconds since Jan 1, 1970)
+  - Timestamp calculation: `unix_timestamp` (in seconds)
+  - Database: `~/.mozilla/firefox/*/cookies.sqlite`
+  - Table: `moz_cookies` with `host`, `expiry` columns
+
+**Loading Strategy:**
+1. Try Chrome/Chromium first (most commonly used)
+2. Fall back to Firefox if Chrome unavailable or has 0 cookies
+3. Filter out expired cookies using correct epoch for each browser
+4. Display count of loaded cookies on startup
+
+**Critical Bug Fix:**
+- Initial implementation loaded 0 cookies due to incorrect timestamp format
+- Was using: `chrono::Utc::now().timestamp() * 1_000_000` (Unix microseconds)
+- Fixed to: `(chrono::Utc::now().timestamp() + 11_644_473_600) * 1_000_000` (Chrome FILETIME)
+- Now successfully loads 187 cookies from Chrome
+
+**Files Modified:**
+- **collect-stories:**
+  - `crates/shared/src/cookies.rs` (new) - Cookie loading logic
+  - `crates/shared/src/extractor.rs` - Integration with reqwest
+  - `Cargo.toml` - Added dependencies: rusqlite, cookie_store, url
+
+- **beatcheck:**
+  - `src/services/content_fetcher.rs` - Added Chrome support + Firefox fallback
+  - Previously only supported Firefox, now tries Chrome first
+
+**GitHub Actions:**
+- CI workflow: ✅ Passing (format, build, check, clippy, test)
+- Build Binaries workflow: ⚠️ Has outdated binary name "podcast-briefing" (non-critical)
+
+**Commits:**
+- `21d7b20` - feat: add browser cookie support for Chrome and Firefox
+- `8a1283f` - chore: fix formatting and clippy warnings
+- `ff05e75` - fix: resolve clippy warnings for CI
+
+**Dependencies Added:**
+- `rusqlite = "0.32"` - SQLite database access for cookie stores
+- `cookie_store = "0.21"` - Cookie management and parsing
+- `url = "2.5"` - URL parsing for cookie domain association
+
+## Session Dates
+
+- 2026-01-31 - Initial development and prepare-briefing tool
+- 2026-02-01 - Browser cookie support implementation
