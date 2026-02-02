@@ -18,16 +18,13 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: podcast-briefing
-            asset_name: podcast-briefing-linux-amd64
+            asset_suffix: linux-amd64
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact_name: podcast-briefing
-            asset_name: podcast-briefing-macos-amd64
+            asset_suffix: macos-amd64
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact_name: podcast-briefing
-            asset_name: podcast-briefing-macos-arm64
+            asset_suffix: macos-arm64
 
     steps:
       - name: Checkout code
@@ -39,18 +36,26 @@ jobs:
           toolchain: stable
           target: ${{ matrix.target }}
 
-      - name: Build release binary
+      - name: Build release binaries
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Strip binary (Linux/macOS)
+      - name: Strip binaries (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+        run: |
+          strip target/${{ matrix.target }}/release/collect-stories
+          strip target/${{ matrix.target }}/release/prepare-briefing
 
-      - name: Upload binary
+      - name: Upload collect-stories
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset_name }}
-          path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          name: collect-stories-${{ matrix.asset_suffix }}
+          path: target/${{ matrix.target }}/release/collect-stories
+
+      - name: Upload prepare-briefing
+        uses: actions/upload-artifact@v4
+        with:
+          name: prepare-briefing-${{ matrix.asset_suffix }}
+          path: target/${{ matrix.target }}/release/prepare-briefing
 
   release:
     name: Create Release
@@ -68,9 +73,12 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            podcast-briefing-linux-amd64/podcast-briefing
-            podcast-briefing-macos-amd64/podcast-briefing
-            podcast-briefing-macos-arm64/podcast-briefing
+            collect-stories-linux-amd64/collect-stories
+            collect-stories-macos-amd64/collect-stories
+            collect-stories-macos-arm64/collect-stories
+            prepare-briefing-linux-amd64/prepare-briefing
+            prepare-briefing-macos-amd64/prepare-briefing
+            prepare-briefing-macos-arm64/prepare-briefing
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
