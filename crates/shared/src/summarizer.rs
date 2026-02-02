@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use futures::stream::{self, StreamExt};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
@@ -271,7 +272,7 @@ If there's a quote but no clear speaker attribution in the article, omit the QUO
         &self,
         articles: Vec<(String, String)>,
     ) -> Vec<(String, Summary)> {
-        stream::iter(articles)
+        let results: Vec<(String, Summary)> = stream::iter(articles)
             .map(|(url, content)| {
                 let url_clone = url.clone();
                 async move {
@@ -279,11 +280,16 @@ If there's a quote but no clear speaker attribution in the article, omit the QUO
                         .summarize_article(&content)
                         .await
                         .unwrap_or_else(|e| Summary::Failed(e.to_string()));
+                    // Print progress dot
+                    eprint!(".");
+                    let _ = std::io::stderr().flush();
                     (url_clone, summary)
                 }
             })
             .buffer_unordered(2) // Reduced to 2 to avoid rate limits
             .collect()
-            .await
+            .await;
+        eprintln!(); // Newline after dots
+        results
     }
 }
