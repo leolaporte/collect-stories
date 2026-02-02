@@ -269,13 +269,11 @@ Systemd timer runs daily at 6pm Pacific to generate and upload briefings.
 | MacBreak Weekly | Tuesday | 3pm Pacific |
 | Intelligent Machines | Wednesday | 6pm Pacific |
 
-**Automation Schedule:**
-| Day | Time | Prepares |
-|-----|------|----------|
-| Sunday | 6pm | MBW (Tuesday) |
-| Monday | 6pm | MBW (Tuesday) |
-| Tuesday | 3pm | IM (Wednesday) |
-| Wed-Sat | 6pm | TWiT (Sunday) |
+**Automation:**
+- Runs daily at 6pm Pacific
+- Processes ALL THREE shows on every run
+- Per-show lookback: only collects stories since that show's previous episode ended
+- Uploads to show-specific folders: `/Briefings/{twit,mbw,im}/index.html`
 
 **Files (in ~/Sync/dotfiles/cachyos/sway/):**
 - `scripts/podcast-briefing.sh` - Main automation script
@@ -296,6 +294,9 @@ tail -f /tmp/podcast-briefing.log
 
 **Key Implementation Details:**
 - Credentials stored in `~/.config/podcast-briefing/.env` (chmod 600)
-- WebDAV upload to Fastmail: `https://myfiles.fastmail.com/Briefings/index.html`
+- WebDAV uploads to Fastmail:
+  - `https://myfiles.fastmail.com/Briefings/twit/index.html`
+  - `https://myfiles.fastmail.com/Briefings/mbw/index.html`
+  - `https://myfiles.fastmail.com/Briefings/im/index.html`
 - Must use full binary paths (`$HOME/.local/bin/collect-stories`) since `~/.local/bin` is not in systemd's PATH
-- WebDAV path is `/Briefings/index.html` (not `/twit.show/Briefings/`)
+- `Persistent=true` in timer ensures runs happen even after sleep/wake
