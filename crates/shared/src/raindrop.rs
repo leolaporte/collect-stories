@@ -43,7 +43,8 @@ impl RaindropClient {
         let per_page = 50;
 
         let date_str = since.format("%Y-%m-%d").to_string();
-        let search_query = format!("{} created:>{}", tag, date_str);
+        // Search by date only, then filter by tag case-insensitively
+        let search_query = format!("created:>{}", date_str);
 
         loop {
             let url = format!(
@@ -86,6 +87,18 @@ impl RaindropClient {
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         }
 
-        Ok(all_bookmarks)
+        // Filter by tag (case-insensitive)
+        let tag_lower = tag.to_lowercase();
+        let filtered_bookmarks: Vec<Bookmark> = all_bookmarks
+            .into_iter()
+            .filter(|bookmark| {
+                bookmark
+                    .tags
+                    .iter()
+                    .any(|t| t.to_lowercase() == tag_lower)
+            })
+            .collect();
+
+        Ok(filtered_bookmarks)
     }
 }
