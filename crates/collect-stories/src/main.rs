@@ -248,6 +248,9 @@ async fn main() -> Result<()> {
     println!("✓ Organized into {} topics", topics.len());
 
     println!("\n📝 Generating org-mode document...");
+    // Calculate the show date for the filename (e.g., next Tuesday for MBW)
+    let show_date =
+        shared::briefing::BriefingGenerator::next_show_datetime(&show_info.name, local_as_utc);
     let org_content = shared::briefing::BriefingGenerator::generate_org_mode(
         &topics,
         &show_info.name,
@@ -256,7 +259,7 @@ async fn main() -> Result<()> {
     let org_filepath = shared::briefing::BriefingGenerator::save_org_mode(
         &org_content,
         &show_info.slug,
-        local_as_utc,
+        show_date,
     )
     .context("Failed to save org-mode file")?;
 

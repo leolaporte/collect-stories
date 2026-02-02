@@ -46,9 +46,9 @@ fn main() -> Result<()> {
         topics.iter().map(|t| t.stories.len()).sum::<usize>()
     );
 
-    // Use local time for file naming (same as collect-stories)
+    // Use local time for show date calculation (same as collect-stories)
     let local_now = Local::now();
-    let now = Utc
+    let local_as_utc = Utc
         .with_ymd_and_hms(
             local_now.year(),
             local_now.month(),
@@ -60,17 +60,23 @@ fn main() -> Result<()> {
         .unwrap();
     let show_slug = extract_show_slug(&org_file)?;
 
+    // Calculate the show date for the filename (e.g., next Tuesday for MBW)
+    let show_date =
+        shared::briefing::BriefingGenerator::next_show_datetime(&show_name, local_as_utc);
+
     println!("\n📝 Generating HTML briefing...");
-    let html_content = shared::briefing::BriefingGenerator::generate(&topics, &show_name, now);
-    let html_filepath = shared::briefing::BriefingGenerator::save(&html_content, &show_slug, now)
-        .context("Failed to save HTML file")?;
+    let html_content =
+        shared::briefing::BriefingGenerator::generate(&topics, &show_name, show_date);
+    let html_filepath =
+        shared::briefing::BriefingGenerator::save(&html_content, &show_slug, show_date)
+            .context("Failed to save HTML file")?;
 
     println!("✓ HTML saved to: {}", html_filepath.display());
 
     println!("\n📊 Generating links CSV...");
     let csv_content = shared::briefing::BriefingGenerator::generate_links_csv(&topics);
     let csv_filepath =
-        shared::briefing::BriefingGenerator::save_links_csv(&csv_content, &show_slug, now)
+        shared::briefing::BriefingGenerator::save_links_csv(&csv_content, &show_slug, show_date)
             .context("Failed to save CSV file")?;
 
     println!("✓ CSV saved to: {}", csv_filepath.display());

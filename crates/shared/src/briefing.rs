@@ -20,7 +20,8 @@ impl BriefingGenerator {
         }
     }
 
-    fn calculate_next_show_date(show_name: &str, from_date: DateTime<Utc>) -> String {
+    /// Calculate the next show date as a DateTime
+    pub fn next_show_datetime(show_name: &str, from_date: DateTime<Utc>) -> DateTime<Utc> {
         use chrono::{Datelike, Timelike, Weekday};
 
         // Show schedule: (target weekday, cutoff hour in Pacific time)
@@ -52,8 +53,11 @@ impl BriefingGenerator {
             7 - (current_day - target_day)
         };
 
-        let next_show = from_date + chrono::Duration::days(days_until_target as i64);
+        from_date + chrono::Duration::days(days_until_target as i64)
+    }
 
+    fn calculate_next_show_date(show_name: &str, from_date: DateTime<Utc>) -> String {
+        let next_show = Self::next_show_datetime(show_name, from_date);
         // Format as "Tue, 3 February 2026"
         next_show.format("%a, %-d %B %Y").to_string()
     }
