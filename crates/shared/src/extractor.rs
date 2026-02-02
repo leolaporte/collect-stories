@@ -12,6 +12,13 @@ pub struct ArticleContent {
     pub published_date: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub enum ExtractionResult {
+    Success(ArticleContent),
+    Paywalled,
+    Failed(String),
+}
+
 pub struct ContentExtractor {
     client: Client,
     semaphore: Arc<Semaphore>,
@@ -47,16 +54,24 @@ impl ContentExtractor {
         Ok(Self { client, semaphore })
     }
 
-    pub async fn fetch_article_content(&self, url: &str) -> Result<Option<ArticleContent>> {
-        let _permit = self.semaphore.acquire().await?;
+    pub async fn fetch_article_content(&self, url: &str) -> ExtractionResult {
+        let _permit = match self.semaphore.acquire().await {
+            Ok(p) => p,
+            Err(e) => return ExtractionResult::Failed(e.to_string()),
+        };
 
         for attempt in 0..3 {
             match self.try_fetch_article(url).await {
-                Ok(content) => return Ok(content),
+                Ok(content) => return ExtractionResult::Success(content),
                 Err(e) => {
+                    let error_msg = e.to_string();
+                    // Don't retry 403 errors - they're paywalls
+                    if error_msg.contains("403") {
+                        return ExtractionResult::Paywalled;
+                    }
                     if attempt == 2 {
                         eprintln!("Failed to fetch {}: {}", url, e);
-                        return Ok(None);
+                        return ExtractionResult::Failed(error_msg);
                     }
                     let backoff = std::time::Duration::from_millis(500 * (2_u64.pow(attempt)));
                     tokio::time::sleep(backoff).await;
@@ -64,10 +79,10 @@ impl ContentExtractor {
             }
         }
 
-        Ok(None)
+        ExtractionResult::Failed("Max retries exceeded".to_string())
     }
 
-    async fn try_fetch_article(&self, url: &str) -> Result<Option<ArticleContent>> {
+    async fn try_fetch_article(&self, url: &str) -> Result<ArticleContent> {
         let response = self
             .client
             .get(url)
@@ -112,10 +127,10 @@ impl ContentExtractor {
             );
         }
 
-        Ok(Some(ArticleContent {
+        Ok(ArticleContent {
             text,
             published_date,
-        }))
+        })
     }
 
     fn extract_published_date(&self, html: &str) -> Option<String> {
@@ -175,13 +190,13 @@ impl ContentExtractor {
     pub async fn fetch_articles_parallel(
         &self,
         urls: Vec<String>,
-    ) -> Vec<(String, Option<ArticleContent>)> {
+    ) -> Vec<(String, ExtractionResult)> {
         stream::iter(urls)
             .map(|url| {
                 let url_clone = url.clone();
                 async move {
-                    let content = self.fetch_article_content(&url).await.ok().flatten();
-                    (url_clone, content)
+                    let result = self.fetch_article_content(&url).await;
+                    (url_clone, result)
                 }
             })
             .buffer_unordered(10)

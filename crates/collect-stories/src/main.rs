@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use chrono::{Datelike, Duration, Local, TimeZone, Timelike, Utc};
 use clap::Parser;
 use shared::{
-    ArticleContent, ClaudeSummarizer, Config, ContentExtractor, RaindropClient, ShowInfo, Story,
-    Summary, TopicClusterer,
+    ArticleContent, ClaudeSummarizer, Config, ContentExtractor, ExtractionResult, RaindropClient,
+    ShowInfo, Story, Summary, TopicClusterer,
 };
 use std::collections::HashMap;
 use std::fs::OpenOptions;
@@ -130,32 +130,35 @@ async fn main() -> Result<()> {
     let urls: Vec<String> = bookmarks.iter().map(|b| b.link.clone()).collect();
     let content_results = extractor.fetch_articles_parallel(urls).await;
 
-    // Create a map of URL -> ArticleContent for correct pairing
-    let content_map: HashMap<String, ArticleContent> = content_results
-        .into_iter()
-        .filter_map(|(url, content)| content.map(|c| (url, c)))
-        .collect();
+    // Create maps for successful extractions and paywalled URLs
+    let mut content_map: HashMap<String, ArticleContent> = HashMap::new();
+    let mut paywalled_urls: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-    let successful_extractions = content_map.len();
-    let failed_count = bookmarks.len() - successful_extractions;
-
-    println!(
-        "✓ Successfully extracted content from {}/{} articles",
-        successful_extractions,
-        bookmarks.len()
-    );
-
-    // Log failed extractions to error log
-    if failed_count > 0 {
-        for bookmark in &bookmarks {
-            if !content_map.contains_key(&bookmark.link) {
-                log_error(&format!(
-                    "Failed to extract article: \"{}\" - URL: {}",
-                    bookmark.title, bookmark.link
-                ));
+    for (url, result) in content_results {
+        match result {
+            ExtractionResult::Success(content) => {
+                content_map.insert(url, content);
+            }
+            ExtractionResult::Paywalled => {
+                paywalled_urls.insert(url);
+            }
+            ExtractionResult::Failed(reason) => {
+                log_error(&format!("Failed to extract: {} - {}", url, reason));
             }
         }
     }
+
+    let successful_extractions = content_map.len();
+    let paywalled_count = paywalled_urls.len();
+    let failed_count = bookmarks.len() - successful_extractions - paywalled_count;
+
+    println!(
+        "✓ Extracted {}/{} articles ({} paywalled, {} failed)",
+        successful_extractions,
+        bookmarks.len(),
+        paywalled_count,
+        failed_count
+    );
 
     // Only summarize articles that have content
     let mut summary_map: HashMap<String, Summary> = HashMap::new();
@@ -192,9 +195,18 @@ async fn main() -> Result<()> {
     let stories: Vec<Story> = bookmarks
         .iter()
         .map(|bookmark| {
-            // Determine the summary to use
-            let summary = if let Some(article_content) = content_map.get(&bookmark.link) {
-                // We have content - use the summary (or Failed if summarization failed)
+            // Check if article was paywalled
+            if paywalled_urls.contains(&bookmark.link) {
+                return Story {
+                    title: bookmark.title.clone(),
+                    url: bookmark.link.clone(),
+                    created: bookmark.created.clone(),
+                    summary: Summary::Failed("Paywalled - summary unavailable".to_string()),
+                };
+            }
+
+            // Check if we have content
+            if let Some(article_content) = content_map.get(&bookmark.link) {
                 let created = article_content
                     .published_date
                     .clone()
@@ -211,16 +223,14 @@ async fn main() -> Result<()> {
                     created,
                     summary,
                 };
-            } else {
-                // No content extracted
-                Summary::Failed("Summary not available".to_string())
-            };
+            }
 
+            // No content extracted
             Story {
                 title: bookmark.title.clone(),
                 url: bookmark.link.clone(),
                 created: bookmark.created.clone(),
-                summary,
+                summary: Summary::Failed("Summary not available".to_string()),
             }
         })
         .collect();
