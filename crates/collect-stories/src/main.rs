@@ -191,14 +191,17 @@ async fn main() -> Result<()> {
         );
     }
 
-    // Helper to create fallback summary from Raindrop note field
+    // Helper to create fallback summary from Raindrop note or excerpt fields
     let fallback_summary = |bookmark: &shared::raindrop::Bookmark, reason: &str| -> Summary {
-        if let Some(note) = &bookmark.note {
-            if !note.trim().is_empty() {
-                return Summary::Success {
-                    points: vec![note.clone()],
-                    quote: None,
-                };
+        // Try note first, then excerpt
+        for field in [&bookmark.note, &bookmark.excerpt] {
+            if let Some(text) = field {
+                if !text.trim().is_empty() {
+                    return Summary::Success {
+                        points: vec![text.clone()],
+                        quote: None,
+                    };
+                }
             }
         }
         Summary::Failed(reason.to_string())
