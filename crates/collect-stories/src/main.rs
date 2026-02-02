@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::{Duration, Local, Utc};
+use chrono::{Datelike, Duration, Local, TimeZone, Timelike, Utc};
 use clap::Parser;
 use shared::{
     ArticleContent, ClaudeSummarizer, Config, ContentExtractor, RaindropClient, ShowInfo, Story,
@@ -95,7 +95,18 @@ async fn main() -> Result<()> {
     let since = now - Duration::days(args.days);
 
     // Use local time for show date calculation (Pacific time zone)
-    let local_now = Local::now().with_timezone(&Utc);
+    // Get the local date/time and convert it to UTC with same date/time values (not same instant)
+    let local_now = Local::now();
+    let local_as_utc = Utc
+        .with_ymd_and_hms(
+            local_now.year(),
+            local_now.month(),
+            local_now.day(),
+            local_now.hour(),
+            local_now.minute(),
+            local_now.second(),
+        )
+        .unwrap();
 
     println!("\n📚 Fetching bookmarks from Raindrop.io...");
     let raindrop_client = RaindropClient::new(config.raindrop_api_token)?;
@@ -237,11 +248,17 @@ async fn main() -> Result<()> {
     println!("✓ Organized into {} topics", topics.len());
 
     println!("\n📝 Generating org-mode document...");
-    let org_content =
-        shared::briefing::BriefingGenerator::generate_org_mode(&topics, &show_info.name, local_now);
-    let org_filepath =
-        shared::briefing::BriefingGenerator::save_org_mode(&org_content, &show_info.slug, local_now)
-            .context("Failed to save org-mode file")?;
+    let org_content = shared::briefing::BriefingGenerator::generate_org_mode(
+        &topics,
+        &show_info.name,
+        local_as_utc,
+    );
+    let org_filepath = shared::briefing::BriefingGenerator::save_org_mode(
+        &org_content,
+        &show_info.slug,
+        local_as_utc,
+    )
+    .context("Failed to save org-mode file")?;
 
     println!(
         "\n✅ Org-mode document saved to: {}",
