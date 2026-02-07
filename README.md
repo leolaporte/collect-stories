@@ -57,7 +57,7 @@ Converts manually-edited org-mode documents to HTML and CSV formats ready for up
 ### Build and Install
 
 ```bash
-cd ~/Projects/collect-stories
+cd ~/Projects/briefing
 cargo build --release --workspace
 cp target/release/collect-stories ~/.local/bin/
 cp target/release/prepare-briefing ~/.local/bin/
@@ -657,7 +657,7 @@ cargo fmt --workspace
 ## Project Structure
 
 ```
-collect-stories/
+briefing/
 ├── Cargo.toml                    # Workspace manifest
 ├── README.md                     # This file
 └── crates/

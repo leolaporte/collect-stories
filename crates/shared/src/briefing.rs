@@ -10,14 +10,18 @@ pub struct BriefingGenerator;
 
 impl BriefingGenerator {
     fn format_date(date_str: &str) -> String {
-        // Parse the ISO 8601 date string
+        // Try RFC 3339 first (e.g., "2026-02-07T02:15:35.268Z")
         if let Ok(dt) = date_str.parse::<DateTime<Utc>>() {
-            // Format as "Wednesday, 01/29/2026 3:17 AM"
-            dt.format("%A, %m/%d/%Y %l:%M %p").to_string()
-        } else {
-            // Fallback to original string if parsing fails
-            date_str.to_string()
+            return dt.format("%-d-%b-%Y %-I:%M%p").to_string();
         }
+        // Try common date-only formats (legacy org files)
+        for fmt in &["%a, %e %b %Y", "%a, %d %b %Y", "%Y-%m-%d"] {
+            if let Ok(nd) = chrono::NaiveDate::parse_from_str(date_str.trim(), fmt) {
+                return nd.format("%-d-%b-%Y").to_string();
+            }
+        }
+        // Fallback to original string
+        date_str.to_string()
     }
 
     /// Calculate the next show date as a DateTime
@@ -465,7 +469,7 @@ mod tests {
     #[test]
     fn test_format_date_valid_iso() {
         let result = BriefingGenerator::format_date("2026-02-01T15:30:00Z");
-        assert!(result.contains("02/01/2026"));
+        assert_eq!(result, "1-Feb-2026 3:30PM");
     }
 
     #[test]

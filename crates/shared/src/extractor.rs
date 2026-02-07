@@ -172,16 +172,16 @@ impl ContentExtractor {
     }
 
     fn format_date(&self, date_str: &str) -> Option<String> {
-        // Try parsing ISO 8601 format first
+        // Try parsing ISO 8601 / RFC 3339 format first — keep it as-is
         if let Ok(dt) = date_str.parse::<DateTime<Utc>>() {
-            return Some(dt.format("%a, %-d %b %Y").to_string());
+            return Some(dt.to_rfc3339());
         }
 
-        // If it's just a date without time, try parsing that
+        // If it's just a date without time, normalize to RFC 3339 at midnight UTC
         if let Ok(naive_date) = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
             let datetime = naive_date.and_hms_opt(0, 0, 0)?;
             let dt: DateTime<Utc> = DateTime::from_naive_utc_and_offset(datetime, Utc);
-            return Some(dt.format("%a, %-d %b %Y").to_string());
+            return Some(dt.to_rfc3339());
         }
 
         None
@@ -224,7 +224,7 @@ mod tests {
         let result = test_format_date("2026-02-01T15:30:00Z");
         assert!(result.is_some());
         let formatted = result.unwrap();
-        assert!(formatted.contains("1 Feb 2026") || formatted.contains("Feb"));
+        assert!(formatted.contains("2026-02-01"), "Expected RFC 3339 format, got: {}", formatted);
     }
 
     #[test]
@@ -312,11 +312,11 @@ mod tests {
     fn test_article_content_struct() {
         let content = ArticleContent {
             text: "Article text".to_string(),
-            published_date: Some("Sat, 1 Feb 2026".to_string()),
+            published_date: Some("2026-02-01T00:00:00+00:00".to_string()),
         };
 
         assert_eq!(content.text, "Article text");
-        assert_eq!(content.published_date, Some("Sat, 1 Feb 2026".to_string()));
+        assert_eq!(content.published_date, Some("2026-02-01T00:00:00+00:00".to_string()));
     }
 
     #[test]

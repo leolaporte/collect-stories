@@ -1380,7 +1380,10 @@ dependencies = [
  "chrono",
  "clap",
  "dirs",
+ "dotenvy",
+ "reqwest",
  "shared",
+ "tokio",
 ]
 
 [[package]]
